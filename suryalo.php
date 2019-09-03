@@ -3,7 +3,7 @@
 /**
  * Thanks To : Janu Yoga & Aan Ahmad
  * Date Share : 27-03-2019 (First Share)
- * Date Updated V.5 : 29-Agustus-2019
+ * Date Updated V.6 : 30-Agustus-2019
  * Created By : Will Pratama - facebook.com/yaelahhwil
 **/
  
@@ -14,87 +14,100 @@ class Marlboro extends modules
         protected $cookie;
         protected $modules;
  
-        public function __construct()
-        {
-                $this->modules = new modules();
-        }
- 
         private function cookiesAkun()
         {
                 $file = $this->fileCookies;
                 foreach(explode("\n", str_replace("\r", "", file_get_contents($file))) as $a => $data)
                 {
                         $pecah = explode("|", trim($data));
-                        return array("cookie" => $pecah[0], "email" => $pecah[1], "password" => $pecah[2], "deviceid" => $pecah[3]);
+                        return array("decide_session" => $pecah[0], "email" => $pecah[1], "password" => $pecah[2], "device_id" => $pecah[3]);
                 }
         }
  
-        protected function login($email, $password)
+        public function generateData($cookies = false)
+        {
+                $url = 'https://www.marlboro.id/auth/login';
+                if($cookies == "true")
+                {
+                        $headers = explode("\n", "Host: www.marlboro.id\nSec-Fetch-Mode: navigate\nSec-Fetch-User: ?1\nSec-Fetch-Site: same-origin\nCookie: deviceId=".$this->cookiesAkun()['device_id']."; decide_session=".$this->cookiesAkun()['decide_session']);
+                }else{
+                        $headers = explode("\n", "Host: www.marlboro.id\nSec-Fetch-Mode: navigate\nSec-Fetch-User: ?1\nSec-Fetch-Site: same-origin");
+                }
+ 
+                $generateData = $this->request($url, null, $headers, 'GET');
+                $decide_session = $this->fetchCookies($generateData[1])['decide_session'];
+                $decide_csrf = $this->getStr($generateData[0], '<input type="hidden" name="decide_csrf" value="', '"', 1, 0);
+                @$device_id = $this->fetchCookies($generateData[1])['deviceId'];
+                return array(
+                        trim($decide_session),
+                        trim($decide_csrf),
+                        trim($device_id),
+                );
+        }
+ 
+        public function login($email, $password)
         {
                 if(@file_exists($this->fileCookies) == true)
                 {
                         @unlink($this->fileCookies);
                 }
  
-                $cook = $this->modules->fetchCookies($this->modules->curl("https://www.marlboro.id", null, array("Host: www.marlboro.id"), 'GET')[1]);
-                $headers = array();
-                $headers[] = "Content-Type: application/x-www-form-urlencoded; charset=UTF-8";
-                $headers[] = "Cookie: decide_session=".$cook['decide_session'];
-                $headers[] = "X-Requested-With: XMLHttpRequest";
-                $csrf = $this->modules->getStr($this->modules->curl("https://www.marlboro.id", null, $headers, 'GET')[0], 'name="decide_csrf" value="', '"', 1, 0);
-                $login = $this->modules->curl("https://www.marlboro.id/auth/login", "email=".str_replace("@", "%40", $email)."&password=".$password."&ref_uri=%2F&decide_csrf=".$csrf."&param=&exception_redirect=false", $headers);
-                $cookies = $this->modules->fetchCookies($login[1])['decide_session'];
-                $deviceid = $this->modules->fetchCookies($login[1])['deviceId'];
-            $this->modules->fwrite($this->fileCookies, trim($cookies)."|".$email."|".$password."|".trim($deviceid));
+                $generateData = $this->generateData();
+ 
+                $url = "https://www.marlboro.id/auth/login";
+                $headers = explode("\n","Host: www.marlboro.id\nX-Requested-With: XMLHttpRequest\nSec-Fetch-Mode: cors\nContent-Type: application/x-www-form-urlencoded; charset=UTF-8\nSec-Fetch-Site: same-origin\nCookie: decide_session=".$generateData[0]);
+                $post = 'email='.trim($email).'&password='.trim($password).'&ref_uri=/&decide_csrf='.$generateData[1].'&param=&exception_redirect=false';
+                $login = $this->request($url, $post, $headers);
+                if(strpos($login[0], '"message":"success"'))
+                {
+                        $decide_session = $this->fetchCookies($login[1])['decide_session'];
+                        $device_id = $this->fetchCookies($login[1])['deviceId'];
+                $this->fwrite($this->fileCookies, trim($decide_session)."|".$email."|".$password."|".trim($device_id));
+                }
+ 
                 return $login;
         }
  
         private function idVidio()
         {
-                $headers = array();
-                $headers[] = "Content-Type: application/x-www-form-urlencoded; charset=UTF-8";
-                $headers[] = "Cookie: deviceId=".$this->cookiesAkun()['deviceid']."; decide_session=".$this->cookiesAkun()['cookie'];
-                $headers[] = "Host: www.marlboro.id";
-                $listIdVidio = $this->modules->curl("https://www.marlboro.id", null, $headers, 'GET');
+                $url = 'https://www.marlboro.id';
+                $headers = explode("\n", "Content-Type: application/x-www-form-urlencoded; charset=UTF-8\nCookie: deviceId=".$this->cookiesAkun()['device_id']."; decide_session=".$this->cookiesAkun()['decide_session']."\nHost: www.marlboro.id");
+                $listIdVidio = $this->request($url, null, $headers, 'GET');
+ 
                 return $listIdVidio[0];
         }
  
-        protected function view($idVidio)
+        public function view($idVidio)
         {
-                $headers = array();
-                $headers[] = "Content-Type: application/x-www-form-urlencoded; charset=UTF-8";
-                $headers[] = "Cookie: deviceId=".$this->cookiesAkun()['deviceid']."; _ga=GA1.2.80096599.1559215776; _gid=GA1.2.79762902.1559215776; ins-mig-done=1; ev=1; _mm3rm4bre_=6B%2FUJWvPEfAWe0iZqDpXOJ1YF8gkcXhrMXVyJC5tajloaHdpamgwem1uYnhrdmlldjQ%3D; accC=true; mp_41fb5b1708a7763a1be4054da0f74d65_mixpanel=%7B%22distinct_id%22%3A%20%2216b0880a02b18f-066b2c15aa7e45-e353165-100200-16b0880a02c862%22%2C%22%24device_id%22%3A%20%2216b0880a02b18f-066b2c15aa7e45-e353165-100200-16b0880a02c862%22%2C%22%24initial_referrer%22%3A%20%22%24direct%22%2C%22%24initial_referring_domain%22%3A%20%22%24direct%22%7D; content_viewc=3; token=JeLy0F7pzJK722MQXeXVcxqbZSdTNxOX; refresh_token=0nvFDJuHhlQ7gb5x21X5GUfzdpnM2vPz; _gat_UA-102334128-3=1; decide_session=".$this->cookiesAkun()['cookie'];
-                $headers[] = "Host: www.marlboro.id";
-                $headers[] = "User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW".rand(000, 999).") AppleWebKit/".rand(00000, 99999).".36 (KHTML, like Gecko) Chrome/72.0.".rand(00000, 99999).".".rand(00000, 99999)." Safari/".rand(00000, 99999).".36";
-                $headers[] = "X-Requested-With: XMLHttpRequest";
-                $csrf = $this->modules->getStr($this->modules->curl("https://www.marlboro.id/", null, $headers, 'GET')[0], 'name="decide_csrf" value="', '"', 1, 0);
-                $view = $this->modules->curl("https://www.marlboro.id/article/video-play/".$idVidio, "decide_csrf=".$csrf."&log_id=false&duration=0.007&total_duration=0&fetch=1&g-recaptcha-response=", $headers);
+                $generateData = $this->generateData("true");
+ 
+                $url = "https://www.marlboro.id/article/video-play/".$idVidio;
+                $headers = explode("\n", "Host: www.marlboro.id\nUpgrade-Insecure-Requests: 1\nSec-Fetch-Mode: navigate\nSec-Fetch-User: ?1\nSec-Fetch-Site: cross-site\nCookie: deviceId=".$generateData[2]."; decide_session=".$generateData[0]);
+                $post = 'decide_csrf='.$generateData[1].'&log_id=false&duration=0.012&total_duration=0&fetch=1&g-recaptcha-response=';
+               
+                $view = $this->request($url, $post, $headers);
                 return $view;
         }
  
-        protected function update($idVidio, $decide_session, $log_id)
+        protected function update($idVidio, $log_id)
         {
-                $headers = array();
-                $headers[] = "Content-Type: application/x-www-form-urlencoded; charset=UTF-8";
-                $headers[] = "Cookie: deviceId=".$this->cookiesAkun()['deviceid']."; _ga=GA1.2.80096599.1559215776; _gid=GA1.2.79762902.1559215776; ins-mig-done=1; ev=1; _mm3rm4bre_=6B%2FUJWvPEfAWe0iZqDpXOJ1YF8gkcXhrMXVyJC5tajloaHdpamgwem1uYnhrdmlldjQ%3D; accC=true; mp_41fb5b1708a7763a1be4054da0f74d65_mixpanel=%7B%22distinct_id%22%3A%20%2216b0880a02b18f-066b2c15aa7e45-e353165-100200-16b0880a02c862%22%2C%22%24device_id%22%3A%20%2216b0880a02b18f-066b2c15aa7e45-e353165-100200-16b0880a02c862%22%2C%22%24initial_referrer%22%3A%20%22%24direct%22%2C%22%24initial_referring_domain%22%3A%20%22%24direct%22%7D; content_viewc=3; token=JeLy0F7pzJK722MQXeXVcxqbZSdTNxOX; refresh_token=0nvFDJuHhlQ7gb5x21X5GUfzdpnM2vPz; _gat_UA-102334128-3=1; decide_session=".$this->cookiesAkun()['cookie'];
-                $headers[] = "Host: www.marlboro.id";
-                $headers[] = "Origin: https://www.marlboro.id";
-                $headers[] = "Referer: https://www.marlboro.id/";
-                $headers[] = "User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW".rand(000, 999).") AppleWebKit/".rand(00000, 99999).".36 (KHTML, like Gecko) Chrome/72.0.".rand(00000, 99999).".".rand(00000, 99999)." Safari/".rand(00000, 99999).".36";
-                $headers[] = "X-Requested-With: XMLHttpRequest";
-                $csrf = $this->modules->getStr($this->modules->curl("https://www.marlboro.id/", null, $headers, 'GET')[0], 'name="decide_csrf" value="', '"', 1, 0);
-                $update = $this->modules->curl("https://www.marlboro.id/article/video-play/".$idVidio, "decide_csrf=".$csrf."&log_id=".$log_id."&duration=11.113&total_duration=5&fetch=2&g-recaptcha-response=", $headers);
+                $generateData = $this->generateData("true");
+ 
+                $url = "https://www.marlboro.id/article/video-play/".$idVidio;
+                $headers = explode("\n", "Host: www.marlboro.id\nUpgrade-Insecure-Requests: 1\nSec-Fetch-Mode: navigate\nSec-Fetch-User: ?1\nSec-Fetch-Site: cross-site\nCookie: deviceId=".$generateData[2]."; decide_session=".$generateData[0]);
+                $post = 'decide_csrf='.$generateData[1].'&log_id='.$log_id.'&duration=11.052&total_duration=5&fetch=2&g-recaptcha-response';
+               
+                $update = $this->request($url, $post, $headers);
                 return $update[0];
         }
  
-        private function getPoint()
+        public function getPoint()
         {
-                $headers = array();
-                $headers[] = "Content-Type: application/x-www-form-urlencoded; charset=UTF-8";
-                $headers[] = "Cookie: "."deviceId=".$this->cookiesAkun()['deviceid']."; decide_session=".$this->cookiesAkun()['cookie'];
-                $headers[] = "Host: www.marlboro.id";
-                $get = $this->modules->curl("https://www.marlboro.id/profile", null, $headers, 'GET');
-                return trim(@$this->modules->getStr($get[0], '<div class="point">', '</div>', 1, 0));
+                $url = "https://www.marlboro.id/profile";
+                $headers = explode("\n", "Host: www.marlboro.id\nUpgrade-Insecure-Requests: 1\nSec-Fetch-Mode: navigate\nSec-Fetch-User: ?1\nSec-Fetch-Site: cross-site\nCookie: deviceId=".$this->cookiesAkun()['device_id']."; decide_session=".$this->cookiesAkun()['decide_session']);
+                $get = $this->request($url, null, $headers, 'GET');
+                $points = $this->getStr($get[0], '<img class="icon-point" src="/assets/images/icon-point.svg"/><div class="point">', '<span>', 1, 0);
+                return trim($points);
         }
  
         public function execute_login($email, $password)
@@ -103,11 +116,8 @@ class Marlboro extends modules
                 {
                         @$pointAwal = $this->getPoint();
                         $login = $this->login($email, $password);
-                        @$cookies = trim($this->modules->fetchCookies($login[1])['decide_session']);
-                        @$deviceid = trim($this->modules->fetchCookies($login[1])['deviceId']);
                         if(strpos($login[0], '"code":200,"message":"success"'))
                         {
-                                $this->modules->fwrite($this->fileCookies, @$cookies."|".$email."|".$password."|".$deviceid);
                                 if(@$this->getPoint() == $pointAwal)
                                 {
                                         print PHP_EOL."Success Login!, Limit Get Point Login... Done : ".$this->getPoint()." Pts";
@@ -116,13 +126,37 @@ class Marlboro extends modules
                                         print PHP_EOL."Success Login!, Point Anda : ".$this->getPoint()." Pts";
                                 }
                         }elseif(strpos($login[0], '"message":"Please Accept GoAheadPeople T&C"')){
+                                if(@file_exists($this->fileCookies) == true)
+                                {
+                                        @unlink($this->fileCookies);
+                                }
+ 
                                 print PHP_EOL."Failed Login!, Message : Please Accept GoAheadPeople T&C.. Retry!";
+                        }elseif(strpos($login[0], '"message":"Email atau password yang lo masukan salah."')){
+                                if(@file_exists($this->fileCookies) == true)
+                                {
+                                        @unlink($this->fileCookies);
+                                }
+ 
+                                print PHP_EOL."Email atau password yang lo masukan salah.";
+                                return false;
+                        }elseif(strpos($login[0], '"message":"Action is not allowed"')){
+                                if(@file_exists($this->fileCookies) == true)
+                                {
+                                        @unlink($this->fileCookies);
+                                }
+ 
+                                print PHP_EOL."Action is not allowed";
+                                return false;
+                        }elseif(strpos($login[0], 'Akun lo telah dikunci')){
+                                print PHP_EOL."[RESET PASSWORD] Akun lo telah dikunci karena gagal login berturut-turut.";
+                                return false;  
                         }else{
                                 if(@file_exists($this->fileCookies) == true)
                                 {
                                         @unlink($this->fileCookies);
                                 }
-                                print PHP_EOL."Failed Login";
+                                print PHP_EOL."Failed Login\n".$login[0];
                                 return false;
                         }
                 }
@@ -133,45 +167,50 @@ class Marlboro extends modules
                 if(@file_exists($this->fileCookies) == false){
                         return false;
                 }
-                print PHP_EOL."Mencoba Bot Nonton..";
-                $ya = 1;
-                for($b = $ya; $b <= ($ya + 20); $b++)
+ 
+                $ya = rand(1,27);
+                for($b = $ya; $b <= ($ya + 10); $b++)
                 {      
-                        if($b%2 == 1)
+                        if($b % 2 == 0)
+                        {      
+                                continue;
+                        }      
+ 
+                        @$pointAwal = $this->getPoint();
+                        $idVidio = $this->getStr($this->idVidio(), 'data-ref="https://www.marlboro.id/maze-of-decision/article/', '"', $b, 0);
+                        if(!empty($idVidio))
                         {
-                                @$pointAwal = $this->getPoint();
-                                $idVidio = $this->modules->getStr($this->idVidio(), 'data-ref="https://www.marlboro.id/maze-of-decision/article/', '"', $b, 0);
-                                if(!empty($idVidio))
+                                $view = $this->view($idVidio);
+                                $log_id = $this->getStr($view[0], '"log_id":"', '"', 1, 0);
+                                if(strpos($view[0], '"message":"Success to store log play video."'))
                                 {
-                                        $view = $this->view($idVidio);
-                                        $decide_session = trim($this->modules->fetchCookies($view[1])['decide_session']);
-                                        $log_id = $this->getStr($view[0], '"log_id":"', '"', 1, 0);
-                                        if(strpos($view[0], '"message":"Success to store log play video."'))
+                                        $update = $this->update($idVidio, $log_id);
+                                        if(strpos($update, '"finished":true'))
                                         {
-                                                //print PHP_EOL."Sedang Menonton : ".$idVidio;
-                                                $update = $this->update($idVidio, $decide_session, $log_id);
-                                                if(strpos($update, '"finished":true'))
+                                                if(@$this->getPoint() == @$pointAwal)
                                                 {
-                                                        if(@$this->getPoint() == @$pointAwal)
+                                                        if(strpos($update, '"fifteen":true'))
                                                         {
                                                                 print PHP_EOL."Limit Get Point Nonton!,  Done : ".$email." | ".$this->getPoint()." Pts";
                                                                 return false;
-                                                        }else{ 
-                                                                print PHP_EOL."Success Menonton!, Point anda : ".$this->getPoint()." Pts";
+                                                        }else{
+                                                                continue;
                                                         }      
-                                                }else{
-                                                        print PHP_EOL."Failed!, Point Anda : ".$this->getPoint().PHP_EOL.$update;
-                                                }
-                                        }elseif(strpos($view[0], '"message":"Action is not allowed"')){
-                                                print PHP_EOL."Failed Menonton Vidio!, Message : Action is not allowed..";
-                                                return false;
+                                                }else{ 
+                                                        print PHP_EOL."Success Menonton!, Point anda : ".$this->getPoint()." Pts";
+                                                }      
                                         }else{
-                                                print PHP_EOL."Gagal Menonton ".$view[0];
-                                        }      
-                                }else{
-                                        print PHP_EOL."ID Vidio Tidak Ditemukan..";
+                                                print PHP_EOL."Failed!, Point Anda : ".$this->getPoint().PHP_EOL.$update;
+                                        }
+                                }elseif(strpos($view[0], '"message":"Action is not allowed"')){
+                                        print PHP_EOL."Failed Menonton Vidio!, Message : Action is not allowed..";
                                         return false;
-                                }
+                                }else{
+                                        print PHP_EOL."Gagal Menonton ".$view[0];
+                                }      
+                        }else{
+                                print PHP_EOL."ID Vidio Tidak Ditemukan..";
+                                return false;
                         }
                 }      
         }
@@ -181,13 +220,13 @@ class Marlboro extends modules
                 if(@file_exists($this->fileCookies) == false){
                         return false;
                 }
-                print PHP_EOL."Mencoba Mendapatkan Bonus Points..";
+ 
+                $generateData = $this->generateData("true");
                 @$pointAwal = $this->getPoint();
                 $url = 'https://www.marlboro.id/auth/update-profile';
-                $headers = explode("\n","Host: www.marlboro.id\nContent-Type: application/x-www-form-urlencoded; charset=UTF-8\nX-Requested-With: XMLHttpRequest\nCookie: deviceId=".$this->cookiesAkun()['deviceid']."; decide_session=".$this->cookiesAkun()['cookie'].";");
-                $csrf = $this->modules->getStr($this->modules->curl("https://www.marlboro.id", null, $headers, 'GET')[0], 'name="decide_csrf" value="', '"', 1, 0);
-                $post = 'decide_csrf='.$csrf.'&email=&password=&phone_number=0&city=99&address=jalan+kangen+nomor+rindu+opit+kapan+bagi+ladang&old_password_chg=&new_password_chg=&confirm_password_chg=&security_question=500001002&security_answer=anjinsg&fav_brand1=500019562&fav_brand2=500019457&interest_raw=Visual&province=6&postalcode=0&interest=Visual&stop_subscribe_email_promo=false';
-                $bonusPoints = $this->curl($url, $post, $headers);
+                $headers = explode("\n","Host: www.marlboro.id\nContent-Type: application/x-www-form-urlencoded; charset=UTF-8\nX-Requested-With: XMLHttpRequest\nCookie: decide_session=".$generateData[0].";");
+                $post = 'decide_csrf='.$generateData[1].'&email=&password=&phone_number=0&city=99&address=jalan+kangen+nomor+rindu+opit+kapan+bagi+ladang&old_password_chg=&new_password_chg=&confirm_password_chg=&security_question=500001002&security_answer=anjinsg&fav_brand1=500019562&fav_brand2=500019457&interest_raw=Visual&province=6&postalcode=0&interest=Visual&stop_subscribe_email_promo=false';
+                $bonusPoints = $this->request($url, $post, $headers);
                 if(strpos($bonusPoints[0], '"message":"Update profile Success"'))
                 {
                         if($pointAwal == $this->getPoint())
@@ -197,15 +236,38 @@ class Marlboro extends modules
                                 print PHP_EOL."Sukses Mendapatkan Bonus Point.. ".$this->getPoint()." Pts";
                         }
                 }else{
-                        print PHP_EOL."Gagalss Mendapatkan Bonus Point.. ".$this->getPoint()." Pts";
+                        print PHP_EOL."Gagals Mendapatkan Bonus Point.. ".$this->getPoint()." Pts";
                 }      
+        }
+ 
+        public function tryOut()
+        {
+                if(@file_exists($this->fileCookies) == false){
+                        return false;
+                }
+ 
+                $pointAwal = $this->getPoint();
+                $headers = explode("\n", "Sec-Fetch-Mode: navigate\nHost: www.marlboro.id\nSec-Fetch-User: ?1\nSec-Fetch-Site: same-origin\nCookie: deviceId=".$this->cookiesAkun()['device_id']."; token=rAYvNP0MGas4CyNDkqMyMd8qE33osGZS; decide_session=".$this->cookiesAkun()['decide_session']);
+                $url = "https://www.marlboro.id/auth/login?ref_uri=/maze-of-decision/online-maze-result/&result=getter";
+                $try = $this->request($url, null, $headers, 'GET');
+                if(strpos($try[0], '<title>Login</title>'))
+                {
+                        if($pointAwal == $this->getPoint())
+                        {
+                                print PHP_EOL."Gagal Try Out!.. ".$this->getPoint()." Pts";
+                        }else{
+                                print PHP_EOL."Sukses Try Out!.. ".$this->getPoint()." Pts";
+                        }
+                }else{
+                        print PHP_EOL."Gagals Try Out!.. ".$this->getPoint()." Pts\n".$try[0];
+                }
         }
  
 }
  
 class modules
 {
-        public function curl($url, $param, $headers, $request = 'POST')
+        public function request($url, $param, $headers, $request = 'POST')
         {
                 $ch = curl_init();
                 $data = array(
@@ -261,14 +323,14 @@ $marlboro = new marlboro();
 print "\n[!] Script Created By: Will Pratama";
 print "\n[!] Note: Jangan Run Lebih Dari 1 Terminal, Kecuali File Beda Folder!";
 print "\n[!] Note: Diusahakan menggunakan IP Indonesia";
-print "\n[!] @Version: V.5\n\n";
+print "\n[!] @Version: V.6\n\n";
  
 print "Bonus 250 Points? (Khusus Akun Baru) y/n : ";
 $bonus = trim(fgets(STDIN));
  
 awal:
 echo "Input FIle Akun Marlboro (Email|Pass) : ";
-$fileakun = trim(fgets(STDIN));
+@$fileakun = trim(fgets(STDIN));
  
 if(empty(@file_get_contents($fileakun)))
 {
@@ -286,14 +348,15 @@ while(true)
                 $pecah = explode("|", trim($akon));
                 $email = trim($pecah[0]);
                 $password = trim($pecah[1]);
-                echo PHP_EOL.PHP_EOL."Ekse Akun : ".$email.PHP_EOL;
+                echo PHP_EOL.PHP_EOL.PHP_EOL."Ekse Akun : ".$email.PHP_EOL;
  
-                $marlboro->execute_login($email, $password);
-                if($bonus == "y" or $bonus == "Y")
+                print $marlboro->execute_login($email, $password);
+                if(@$bonus == "y" or @$bonus == "Y")
                 {
-                        $marlboro->bonusPoints();
+                        print $marlboro->bonusPoints();
                 }
-                $marlboro->execute_nonton($email);
+                print $marlboro->tryOut();
+                print $marlboro->execute_nonton($email);
         }
        
         echo PHP_EOL.PHP_EOL."Sleep Time : ".date("Y-m-d H:i:s");
